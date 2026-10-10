@@ -1,0 +1,34 @@
+# Code and figure-generation scripts only. Data, outputs and write-ups stay local.
+
+# data / model pieces / outputs
+results/
+seed_patch/results*/
+figures/cache/
+head/
+*.npz
+*.pt
+*.safetensors
+*.whl
+*.jsonl
+
+# third-party checkouts (cloned separately: see infra/filler-jlens-skypilot.yaml)
+repo/
+paper_repo/
+
+# pod sync copy of the code (rebuilt from baseline/, moe_freeze/ and common.py before a launch)
+podcode/
+
+# write-ups and rendered artefacts
+*.md
+*.pdf
+*.png
+
+# logs, caches, LaTeX build files
+*.log
+__pycache__/
+*.pyc
+*.aux
+*.out
+*.nav
+*.snm
+*.toc

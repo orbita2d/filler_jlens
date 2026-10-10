@@ -1,0 +1,47 @@
+# DeepSeek V4 Flash filler-token J-lens run (notes/experiment-plan.md) on 4xH200.
+#   uvx --from 'skypilot[runpod]' sky launch -c filler-jlens -y --detach-run infra/filler-jlens-skypilot.yaml   (from the repo root)
+# Setup builds ~/fj/.venv, downloads the model (~160 GB), the V4 Flash lenses and the example repo;
+# run executes check.py (step 0) only. run.py is started by hand over ssh afterwards.
+name: filler-jlens
+
+resources:
+  # Any of these hold the ~150 GB FP8/FP4 checkpoint; Hopper first (same Triton path everywhere).
+  # Any region: 4xH200 in North America was unavailable for hours on 2026-10-09.
+  cloud: runpod
+  disk_size: 600
+  any_of:
+    - accelerators: H200-SXM:4
+    - accelerators: H200-SXM:2
+    - accelerators: H100-SXM:4
+    - accelerators: H100:4
+    - accelerators: H100-NVL:4
+    - accelerators: B200:2
+
+envs:
+  MODEL_REPO: deepseek-ai/DeepSeek-V4-Flash
+  MODEL_REVISION: 60d8d70770c6776ff598c94bb586a859a38244f1
+  LENS_REPO: neuronpedia/jacobian-lens
+  HF_HOME: /data/hf
+  HF_XET_HIGH_PERFORMANCE: 1
+  HF_HUB_ENABLE_HF_TRANSFER: 0
+
+file_mounts:
+  ~/fj/code: ./podcode  # code only: this directory also holds results/ (tens of GB)
+
+setup: |
+  set -euo pipefail
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  mkdir -p /data/out /data/hf
+  cd ~/fj
+  ~/.local/bin/uv venv -q --python 3.12 .venv
+  VIRTUAL_ENV=~/fj/.venv ~/.local/bin/uv pip install -q "transformers==5.19.0" torch accelerate safetensors huggingface_hub numpy "kernels==0.17.0"
+  hf() { ~/.local/bin/uvx --from 'huggingface_hub[hf_xet]>=0.34,<1' hf "$@"; }
+  hf download "$MODEL_REPO" --revision "$MODEL_REVISION" --local-dir /data/v4flash
+  hf download "$LENS_REPO" --include "deepseek-v4-flash/*" --local-dir /data/jlens
+  [ -d /data/repo ] || git clone https://github.com/orvelte/fillertokensminiproject /data/repo
+  grep -q "HF_HOME=/data/hf" ~/.bashrc || echo "export HF_HOME=/data/hf" >> ~/.bashrc
+  .venv/bin/python -c "import torch, transformers; print('torch', torch.__version__, 'CUDA', torch.version.cuda, transformers.__version__, torch.cuda.get_device_name(0))"
+
+run: |
+  # Jobs are started by hand over ssh (see results/README.md); this just confirms the environment.
+  ~/fj/.venv/bin/python -c "import torch, transformers, kernels; print(torch.cuda.device_count(), transformers.__version__)"
